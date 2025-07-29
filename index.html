@@ -1,0 +1,1844 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced Desk Booking System - Secure</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    
+    <!-- SheetJS for Excel Export -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    
+    <!-- Google Fonts for consistency -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Global font settings */
+        * {
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeLegibility;
+        }
+        
+        body {
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-optical-sizing: auto;
+        }
+        
+        /* Ensure numbers render consistently */
+        .stat-value,
+        #bookedToday,
+        #availableToday,
+        #yourBookings {
+            font-feature-settings: "tnum", "cv01", "cv02", "cv03", "cv04";
+            font-variant-numeric: tabular-nums;
+        }
+        
+        /* Improved SVG text rendering */
+        svg {
+            shape-rendering: geometricPrecision;
+            text-rendering: geometricPrecision;
+        }
+        
+        /* SVG container styling for dragging */
+        #svgContainer {
+            cursor: grab;
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+        }
+        
+        #svgContainer.dragging {
+            cursor: grabbing;
+        }
+        
+        .svg-text {
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            paint-order: stroke fill;
+            stroke-width: 0.5px;
+            stroke-linejoin: round;
+        }
+        
+        .svg-text-small {
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-size: 10px;
+            font-weight: 500;
+            letter-spacing: 0.01em;
+            paint-order: stroke fill;
+            stroke-width: 0.3px;
+            stroke-linejoin: round;
+        }
+        
+        .svg-text-medium {
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            paint-order: stroke fill;
+            stroke-width: 0.5px;
+            stroke-linejoin: round;
+        }
+        
+        .svg-text-big {
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            paint-order: stroke fill;
+            stroke-width: 0.5px;
+            stroke-linejoin: round;
+        }
+        
+        /* Add subtle stroke for better readability */
+        .svg-text, .svg-text-small, .svg-text-medium, .svg-text-big {
+            stroke: rgba(255, 255, 255, 0.3);
+        }
+        
+        /* Dark text needs dark stroke */
+        text[fill="#374151"], text[fill="#6b7280"] {
+            stroke: rgba(255, 255, 255, 0.4) !important;
+            stroke-width: 0.8px !important;
+        }
+        
+        /* White text needs subtle dark stroke for edge definition */
+        text[fill="white"] {
+            stroke: rgba(0, 0, 0, 0.2) !important;
+            stroke-width: 0.5px !important;
+        }
+        
+        /* Animation styles */
+        .notification {
+            animation: slideIn 0.8s ease-out;
+        }
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        .desk-hover {
+            transition: opacity 0.2s ease;
+        }
+        .desk-hover:hover {
+            opacity: 0.85;
+        }
+        .modal {
+            animation: fadeIn 0.2s ease-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Input and button font improvements */
+        input, button, select, textarea {
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-weight: 500;
+        }
+        
+        /* Ensure consistent font rendering in all text elements */
+        h1, h2, h3, h4, h5, h6, p, span, div {
+            font-feature-settings: "cv01", "cv02", "cv03", "cv04";
+            font-variant-ligatures: contextual;
+        }
+        
+        /* Statistics card improvements */
+        .stat-card {
+            background: white;
+            padding: 1.25rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+            transition: all 0.2s ease;
+            border: 1px solid rgba(0, 0, 0, 0.05);
+        }
+        
+        .stat-card:hover {
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
+            transform: translateY(-1px);
+        }
+        
+        .stat-value {
+            font-size: 2.25rem;
+            font-weight: 700;
+            line-height: 1.1;
+            letter-spacing: -0.02em;
+            margin-bottom: 0.25rem;
+            font-feature-settings: "tnum";
+            font-variant-numeric: tabular-nums;
+        }
+        
+        .stat-label {
+            font-size: 0.875rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #6B7280;
+            line-height: 1.4;
+        }
+        
+        /* Responsive adjustments for statistics */
+        @media (max-width: 768px) {
+            .stat-value {
+                font-size: 2rem;
+            }
+            .stat-label {
+                font-size: 0.813rem;
+            }
+        }
+        
+        /* Enhanced color contrast for statistics */
+        .text-blue-600 { color: #2563EB; }
+        .text-green-600 { color: #059669; }
+        .text-purple-600 { color: #7C3AED; }
+        .text-orange-600 { color: #EA580C; }
+        
+        /* Zoom controls */
+        .zoom-controls {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            display: flex;
+            gap: 8px;
+            background: white;
+            border-radius: 8px;
+            padding: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .zoom-btn {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .zoom-btn:hover {
+            background: #f3f4f6;
+        }
+        
+        .reset-view-btn {
+            padding: 0 12px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .reset-view-btn:hover {
+            background: #f3f4f6;
+        }
+        
+        /* Login form styles */
+        .login-container {
+            max-width: 400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .login-card {
+            background: white;
+            border-radius: 1rem;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            padding: 2.5rem;
+        }
+        
+        .login-input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 2px solid #e5e7eb;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            transition: all 0.2s;
+        }
+        
+        .login-input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+        
+        .login-button {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .login-button:hover {
+            background: #2563eb;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+        
+        .login-button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Admin badge styling */
+        .admin-badge {
+            background: linear-gradient(135deg, #ff6b6b, #ffa500);
+            color: white;
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.375rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Search and filter styles */
+        .search-input {
+            padding: 0.5rem 1rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            width: 200px;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+        }
+
+        .filter-select {
+            padding: 0.5rem 1rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            background: white;
+            cursor: pointer;
+        }
+
+        .booking-item-admin {
+            background: linear-gradient(135deg, #fef3c7, #fde68a);
+            border-left: 4px solid #f59e0b;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gray-50 p-4">
+    <!-- Login Screen -->
+    <div id="loginScreen" class="fixed inset-0 bg-gray-50 z-50 flex items-center justify-center">
+        <div class="login-container">
+            <div class="login-card">
+                <div class="text-center mb-8">
+                    <svg class="w-16 h-16 text-blue-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    </svg>
+                    <h1 class="text-2xl font-bold text-gray-800 mb-2">UCC Offshore</h1>
+                    <p class="text-gray-600">Desk Booking System</p>
+                </div>
+                
+                <form id="loginForm" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Username</label>
+                        <input
+                            type="text"
+                            id="loginUsername"
+                            class="login-input"
+                            placeholder="Enter your username"
+                            required
+                        />
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Password</label>
+                        <input
+                            type="password"
+                            id="loginPassword"
+                            class="login-input"
+                            placeholder="Enter your password"
+                            required
+                        />
+                    </div>
+                    
+                    <div id="loginError" class="text-red-500 text-sm font-medium hidden"></div>
+                    
+                    <button type="submit" class="login-button">
+                        Sign In
+                    </button>
+                </form>
+                
+                <div class="mt-6 text-center text-sm text-gray-600">
+                    <p>Please use your registered credentials to access the system</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Application (hidden initially) -->
+    <div id="mainApp" class="hidden">
+        <!-- Loading Overlay -->
+        <div id="loadingOverlay" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white rounded-lg p-6 text-center">
+                <div class="loading mx-auto mb-4"></div>
+                <p class="text-gray-600 font-medium">Connecting to Database...</p>
+            </div>
+        </div>
+
+        <!-- Header -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h1 class="text-3xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                </svg>
+                UCC Offshore - Desk Booking
+            </h1>
+            
+            <div class="flex flex-wrap gap-4 items-center">
+                <div class="flex items-center gap-2">
+                    <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                    </svg>
+                    <span id="currentUserDisplay" class="font-semibold text-gray-700"></span>
+                    <span id="adminBadge" class="admin-badge hidden">Admin</span>
+                </div>
+                
+                <div class="flex items-center gap-2">
+                    <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 002 2z"/>
+                    </svg>
+                    <input
+                        type="date"
+                        id="selectedDate"
+                        class="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                    />
+                </div>
+                
+                <div class="flex items-center gap-2">
+                    <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <span class="text-sm text-gray-600 font-medium">Choose Date</span>
+                </div>
+                
+                <button
+                    id="manageBookingsBtn"
+                    class="bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-600 transition-colors font-medium"
+                >
+                    <span id="manageBookingsText">Manage Bookings</span>
+                </button>
+
+                <button
+                    id="exportBtn"
+                    class="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 transition-colors hidden font-medium flex items-center gap-2"
+                >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    Export to Excel
+                </button>
+
+                <button
+                    id="refreshBtn"
+                    class="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors flex items-center gap-2 font-medium"
+                >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                    Refresh
+                </button>
+                
+                <button
+                    id="logoutBtn"
+                    class="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition-colors flex items-center gap-2 font-medium"
+                >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                    </svg>
+                    Logout
+                </button>
+            </div>
+        </div>
+
+        <!-- Connection Status -->
+        <div id="connectionStatus" class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4 hidden">
+            <div class="flex items-center gap-2">
+                <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span id="connectionStatusText" class="font-medium">Connected to Firebase..</span>
+            </div>
+        </div>
+
+        <!-- Statistics -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div class="stat-card">
+                <div id="bookedToday" class="stat-value text-blue-600">0</div>
+                <div class="stat-label">Booked Today</div>
+            </div>
+            <div class="stat-card">
+                <div id="availableToday" class="stat-value text-green-600">88</div>
+                <div class="stat-label">Available</div>
+            </div>
+            <div class="stat-card">
+                <div id="yourBookings" class="stat-value text-purple-600">0</div>
+                <div class="stat-label">Your Bookings</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value text-orange-600">88</div>
+                <div class="stat-label">Total Desks</div>
+            </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="bg-white rounded-lg shadow-md p-4 mb-6">
+            <h3 class="font-semibold text-gray-800 mb-2">Legend</h3>
+            <div class="flex flex-wrap gap-6">
+                <div class="flex items-center gap-2">
+                    <div class="w-4 h-4 bg-gray-300 border border-gray-400 rounded"></div>
+                    <span class="text-sm font-medium">Available</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div class="w-4 h-4 bg-green-500 border border-green-600 rounded"></div>
+                    <span class="text-sm font-medium">Your Booking</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div class="w-4 h-4 bg-red-500 border border-red-600 rounded"></div>
+                    <span class="text-sm font-medium">Booked by Others</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Office Layout -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 id="layoutTitle" class="text-xl font-bold text-gray-800 mb-4">
+                Office Layout
+            </h2>
+            
+            <div class="overflow-hidden relative" style="height: 600px; border: 1px solid #e5e7eb; border-radius: 8px;">
+                <div id="svgContainer" class="w-full h-full">
+                    <svg id="officeLayout" width="1800" height="1150" class="border border-gray-300 rounded">
+                        <!-- Define filters for better text rendering -->
+                        <defs>
+                            <filter id="textBackground" x="-20%" y="-20%" width="140%" height="140%">
+                                <feFlood flood-color="white" flood-opacity="0.7"/>
+                                <feComposite in="SourceGraphic" operator="over"/>
+                            </filter>
+                        </defs>
+                        
+                        <!-- Office areas labels -->
+                        <text x="400" y="85" text-anchor="middle" class="svg-text-big" fill="#374151"> SANDYAKALA </text>
+                        <text x="400" y="105" text-anchor="middle" class="svg-text-medium" fill="#374151"> Meeting Room  </text>
+                        <text x="200" y="75" text-anchor="middle" class="svg-text-big" fill="#374151"> SWASTAMITA </text>
+                        <text x="200" y="95" text-anchor="middle" class="svg-text-medium" fill="#374151"> Meeting Room </text>
+                        <text x="50" y="55" text-anchor="middle" class="svg-text-medium" fill="#374151"> Praying Room </text>
+                        <text x="50" y="75" text-anchor="middle" class="svg-text-medium" fill="#374151"> Musholla </text>
+                        <text x="120" y="350" text-anchor="middle" class="svg-text-big" fill="#374151"> PANTRY  </text>
+                        <text x="120" y="370" text-anchor="middle" class="svg-text-medium" fill="#374151"> Breakout Room </text>
+                        <text x="1150" y="460" text-anchor="middle" class="svg-text-medium" fill="#374151"> Photo Copy/Printer </text>
+                        <text x="1570" y="60" text-anchor="middle" class="svg-text-medium" fill="#374151">  Photo Copy </text>
+                        <text x="1570" y="80" text-anchor="middle" class="svg-text-medium" fill="#374151">  Printer </text>
+                        <text x="600" y="100" text-anchor="middle" class="svg-text-big" fill="#374151"> ARUNIKA  </text>
+                        <text x="600" y="120" text-anchor="middle" class="svg-text-medium" fill="#374151"> Meeting Room </text>
+                        <text x="470" y="630" text-anchor="middle" class="svg-text-big" fill="#374151">  RENJANA  </text>
+                        <text x="470" y="650" text-anchor="middle" class="svg-text-medium" fill="#374151"> Meeting Room </text>
+                        <text x="320" y="630" text-anchor="middle" class="svg-text-big" fill="#374151"> SAUJANA </text>
+                        <text x="320" y="650" text-anchor="middle" class="svg-text-medium" fill="#374151"> Meeting Room </text>
+                        <text x="200" y="600" text-anchor="middle" class="svg-text-medium" fill="#374151"> Photo Copy </text>
+                        <text x="200" y="640" text-anchor="middle" class="svg-text-medium" fill="#374151"> Plotter </text>
+                        <text x="560" y="440" text-anchor="middle" class="svg-text-big" fill="#374151"> LIFT </text>
+                        <text x="460" y="440" text-anchor="middle" class="svg-text-big" fill="#374151"> LIFT </text>
+                        <text x="460" y="340" text-anchor="middle" class="svg-text-big" fill="#374151"> LIFT </text>
+                        <text x="560" y="340" text-anchor="middle" class="svg-text-big" fill="#374151"> LIFT </text>
+                    </svg>
+                </div>
+                
+                <!-- Zoom and Pan Controls -->
+                <div class="zoom-controls">
+                    <button id="zoomInBtn" class="zoom-btn" title="Zoom In">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                        </svg>
+                    </button>
+                    <button id="zoomOutBtn" class="zoom-btn" title="Zoom Out">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
+                        </svg>
+                    </button>
+                    <button id="resetViewBtn" class="reset-view-btn" title="Reset View">
+                        Reset
+                    </button>
+                </div>
+            </div>
+            
+            <div class="mt-2 text-sm text-gray-600">
+                <span class="font-medium">Tip:</span> Click and drag to pan around the office layout. Use zoom controls or scroll wheel to zoom.
+            </div>
+        </div>
+
+        <!-- Booking Form Modal -->
+        <div id="bookingModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden modal">
+            <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+                <h3 id="bookingModalTitle" class="text-xl font-semibold mb-4">Book Desk</h3>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Location</label>
+                        <p id="bookingLocation" class="text-gray-600 font-medium"></p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Date</label>
+                        <p id="bookingDate" class="text-gray-600 font-medium"></p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Duration</label>
+                        <p class="text-gray-600 font-medium">8 hours (Full day)</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Booked by</label>
+                        <p id="bookingUser" class="text-gray-600 font-medium"></p>
+                    </div>
+                </div>
+                
+                <div class="flex gap-3 mt-6">
+                    <button
+                        id="confirmBookingBtn"
+                        class="flex-1 bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition-colors font-medium"
+                    >
+                        Confirm Booking
+                    </button>
+                    <button
+                        id="cancelBookingFormBtn"
+                        class="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-400 transition-colors font-medium"
+                    >
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Enhanced Cancellation/Management Modal for Admin -->
+        <div id="cancellationModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden modal">
+            <div class="bg-white rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 id="modalTitle" class="text-xl font-semibold">Your Bookings</h3>
+                    <button id="closeCancellationBtn" class="text-gray-500 hover:text-gray-700">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+                
+                <!-- Admin Controls (shown only for admin) -->
+                <div id="adminControls" class="mb-4 p-4 bg-gradient-to-r from-orange-50 to-amber-50 rounded-lg border border-orange-200 hidden">
+                    <div class="flex flex-wrap gap-4 items-center">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <span class="font-semibold text-orange-800">Admin Controls</span>
+                        </div>
+                        
+                        <input
+                            type="text"
+                            id="searchUser"
+                            placeholder="Search by user name..."
+                            class="search-input"
+                        />
+                        
+                        <select id="filterDate" class="filter-select">
+                            <option value="">All Dates</option>
+                        </select>
+                        
+                        <select id="filterUser" class="filter-select">
+                            <option value="">All Users</option>
+                        </select>
+                        
+                        <button id="clearFiltersBtn" class="bg-gray-500 text-white px-3 py-1 rounded text-sm hover:bg-gray-600 transition-colors">
+                            Clear Filters
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="bookingsList" class="space-y-3 max-h-96 overflow-y-auto">
+                    <!-- Bookings will be populated here -->
+                </div>
+                
+                <div id="noBookingsMessage" class="text-gray-500 text-center py-8 font-medium hidden">
+                    <svg class="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 002 2z"/>
+                    </svg>
+                    <p>No bookings found</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Notification -->
+        <div id="notification" class="fixed top-4 right-4 p-4 rounded-md shadow-lg z-50 hidden notification">
+            <div class="flex items-center gap-2">
+                <svg id="notificationIcon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                <span id="notificationText" class="font-medium"></span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ===============================
+        // REGISTERED USERS DATABASE
+        // ===============================
+        // Modify this list to add/remove/update users
+        // Format: { username: 'string', password: 'string', displayName: 'string', role: 'user'|'admin' }
+        const REGISTERED_USERS = [
+            { username: 'Admin', password: 'Japantop97162', displayName: 'Admin', role: 'admin' },
+            { username: 'satru1', password: 'satru1667', displayName: 'Satria U.', role: 'user' },
+{ username: 'ped9h1', password: 'ped9h1641', displayName: 'Dedi P.', role: 'user' },
+{ username: 'irwkn3', password: 'irwkn3429', displayName: 'Irwan', role: 'user' },
+{ username: 'purba0', password: 'purba0529', displayName: 'Adhi P.', role: 'user' },
+{ username: 'rofimu', password: 'rofimu568', displayName: 'M. Rofik', role: 'user' },
+{ username: 'livia0', password: 'livia0231', displayName: 'Alastair L.', role: 'user' },
+{ username: 'bum1vb', password: 'bum1vb893', displayName: 'Mark B.', role: 'user' },
+{ username: 'clari9', password: 'clari9456', displayName: 'Ian C.', role: 'user' },
+{ username: 'nimdm0', password: 'nimdm0224', displayName: 'M. Niza', role: 'user' },
+{ username: 'busyfn', password: 'busyfn581', displayName: 'Suci A.', role: 'user' },
+{ username: 'sam1ek', password: 'sam1ek577', displayName: 'Mulyawan S.', role: 'user' },
+{ username: 'domenim', password: 'domenim347', displayName: 'Momo', role: 'user' },
+{ username: 'nusrx3', password: 'nusrx3964', displayName: 'Sinta N.', role: 'user' },
+{ username: 'sub2o5', password: 'sub2o5721', displayName: 'Subagio', role: 'user' },
+{ username: '1884uo', password: '1884uo821', displayName: 'Indratmo P.', role: 'user' },
+{ username: 'teguh.diyanto', password: 'pass123', displayName: 'Teguh Diyanto', role: 'user' },
+{ username: '7566ri', password: '7566ri514', displayName: 'Wanda T.', role: 'user' },
+{ username: 'widah0', password: 'widah0632', displayName: 'Hendar W.', role: 'user' },
+{ username: 'probt2', password: 'probt2124', displayName: 'Tetra P.', role: 'user' },
+{ username: '1519vt', password: '1519vt526', displayName: 'Isganta', role: 'user' },
+{ username: 'sukod0', password: 'sukod0493', displayName: 'Djoko w.', role: 'user' },
+{ username: 'fazsku', password: 'fazsku811', displayName: 'Zahirul F.', role: 'user' },
+{ username: 'irbqr6', password: 'irbqr6787', displayName: 'Bambang I.', role: 'user' },
+{ username: 'haikalmp', password: 'haikalmp896', displayName: 'Haikal P.', role: 'user' },
+{ username: 'sojxxy', password: 'sojxxy953', displayName: 'James S.', role: 'user' },
+{ username: '4754dl', password: '4754dl389', displayName: 'Tonci U.', role: 'user' },
+{ username: 'alm3sp', password: 'alm3sp734', displayName: 'Mumtaz A.', role: 'user' },
+{ username: 'simbf0', password: 'simbf0598', displayName: 'Franky S.', role: 'user' },
+{ username: 'alex.townsend', password: 'pass123', displayName: 'Alex Townsend', role: 'user' },
+{ username: 'rahmr0', password: 'rahmr0943', displayName: 'Rully R.', role: 'user' },
+{ username: 'hidaf0', password: 'hidaf0223', displayName: 'Firman H.', role: 'user' },
+{ username: 'wij33m', password: 'wij33m892', displayName: 'Joko W.', role: 'user' },
+{ username: '0973kv', password: '0973kv226', displayName: 'Rian A.', role: 'user' },
+{ username: 'aviaa0', password: 'aviaa0353', displayName: 'Annisa A.', role: 'user' },
+{ username: 'yue3ge', password: 'yue3ge375', displayName: 'Ecky Y.', role: 'user' },
+{ username: '7391mw', password: '7391mw874', displayName: 'Thierza D.', role: 'user' },
+{ username: '7118xa', password: '7118xa669', displayName: 'Jovinka', role: 'user' },
+{ username: 'ruthvenC', password: 'ruthvenC759', displayName: 'Chris R.', role: 'user' },
+{ username: 'zms2gu', password: 'zms2gu323', displayName: 'Marawan Z.', role: 'user' },
+{ username: 'burhs0', password: 'burhs0734', displayName: 'B. Syafiuddin', role: 'user' },
+{ username: 'juam3c', password: 'juam3c984', displayName: 'Anita J.', role: 'user' },
+{ username: '2814yo', password: '2814yo221', displayName: 'Arian A.', role: 'user' },
+{ username: 'prrw9j', password: 'prrw9j986', displayName: 'Tiwi', role: 'user' },
+{ username: 'mufje8', password: 'mufje8323', displayName: 'Febi M.', role: 'user' },
+{ username: '6284qg', password: '6284qg322', displayName: 'M. Rifky', role: 'user' },
+{ username: 'ogaz', password: 'ogaz774', displayName: 'Oga Zano', role: 'user' },
+{ username: 'cowc57', password: 'cowc57259', displayName: 'Wayne C.', role: 'user' },
+{ username: 'm4hns9', password: 'm4hns9235', displayName: 'Carlo', role: 'user' },
+{ username: 'mcgra6', password: 'mcgra6679', displayName: 'Arthur M.', role: 'user' },
+{ username: 'pypem0', password: 'pypem0361', displayName: 'Mick P.', role: 'user' },
+{ username: 'trisnas', password: 'trisnas642', displayName: 'Trisnadi S.', role: 'user' },
+{ username: 'arianikm', password: 'arianikm824', displayName: 'Arian K.M.', role: 'user' },
+{ username: 'akbab2', password: 'akbab2423', displayName: 'Bilal A.', role: 'user' },
+{ username: '6192wq', password: '6192wq984', displayName: 'Ardian N.', role: 'user' },
+{ username: '0700zd', password: '0700zd991', displayName: 'Asep S.', role: 'user' },
+{ username: '1233na', password: '1233na226', displayName: 'Resha I.', role: 'user' },
+{ username: 'bawl0f', password: 'bawl0f994', displayName: 'Wisnu B.', role: 'user' },
+{ username: '2160mz', password: '2160mz937', displayName: 'M. Ilham', role: 'user' },
+{ username: 'cra5v5', password: 'cra5v5863', displayName: 'Ray C.', role: 'user' },
+{ username: '2686ww', password: '2686ww356', displayName: 'Wisnu A.', role: 'user' },
+{ username: 'nuyymk', password: 'nuyymk296', displayName: 'Yogatama N.', role: 'user' },
+{ username: '2640zc', password: '2640zc816', displayName: 'Chantika', role: 'user' },
+{ username: '3008so', password: '3008so158', displayName: 'Nelva S.', role: 'user' },
+{ username: 'yudzbv', password: 'yudzbv475', displayName: 'Dipta Y.', role: 'user' },
+{ username: '3557km', password: '3557km251', displayName: 'Dwi Anto', role: 'user' },
+{ username: 'jehdrx', password: 'jehdrx838', displayName: 'Jefry H.', role: 'user' },
+{ username: '8256fj', password: '8256fj123', displayName: 'Luckyanto', role: 'user' },
+{ username: 'zuyjv3', password: 'zuyjv3798', displayName: 'Yansa Z.', role: 'user' },
+{ username: 'ekdup2', password: 'ekdup2938', displayName: 'Dhian E.', role: 'user' },
+{ username: 'wadlf6', password: 'wadlf6535', displayName: 'Daryl W.', role: 'user' },
+{ username: 'yuecn8', password: 'yuecn8881', displayName: 'Ers H.', role: 'user' },
+{ username: 'nuaruy', password: 'nuaruy664', displayName: 'Ansgarius N.', role: 'user' },
+{ username: 'ramaat', password: 'ramaat838', displayName: 'Dito R.', role: 'user' },
+{ username: '8621mf', password: '8621mf529', displayName: 'Didi', role: 'user' },
+{ username: 'mutiarao', password: 'mutiarao249', displayName: 'Mutiara', role: 'user' },
+            { username: 'das2u9', password: 'das2u9249', displayName: 'Sekita D.', role: 'user' }
+        ];
+
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyCr9-iUpIp1I9W2OD-mkGXC8JBxZBHFqzo",
+            authDomain: "deskbooking-9dab6.firebaseapp.com",
+            databaseURL: "https://deskbooking-9dab6-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "deskbooking-9dab6",
+            storageBucket: "deskbooking-9dab6.firebasestorage.app",
+            messagingSenderId: "293021695561",
+            appId: "1:293021695561:web:296c2260a454c493c38998"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        // Global state
+        let currentUser = null;
+        let selectedDate = new Date().toISOString().split('T')[0];
+        let bookings = {};
+        let selectedDesk = null;
+        let isConnected = false;
+        let bookingsRef = null;
+        let bookingsListener = null;
+        
+        // Pan and zoom state
+        let isPanning = false;
+        let startX = 0;
+        let startY = 0;
+        let translateX = 0;
+        let translateY = 0;
+        let scale = 1;
+        let clickStartTime = 0;
+        let clickStartX = 0;
+        let clickStartY = 0;
+
+        // Filter state for admin
+        let currentFilters = {
+            searchUser: '',
+            filterDate: '',
+            filterUser: ''
+        };
+
+        // Authentication functions
+        function authenticateUser(username, password) {
+            const user = REGISTERED_USERS.find(u => 
+                u.username.toLowerCase() === username.toLowerCase() && 
+                u.password === password
+            );
+            return user || null;
+        }
+
+        function login(username, password) {
+            const user = authenticateUser(username, password);
+            if (user) {
+                currentUser = user;
+                sessionStorage.setItem('currentUser', JSON.stringify(user));
+                return true;
+            }
+            return false;
+        }
+
+        function logout() {
+            currentUser = null;
+            sessionStorage.removeItem('currentUser');
+            location.reload();
+        }
+
+        function checkSession() {
+            const savedUser = sessionStorage.getItem('currentUser');
+            if (savedUser) {
+                currentUser = JSON.parse(savedUser);
+                return true;
+            }
+            return false;
+        }
+
+        // Handle login form submission
+        document.getElementById('loginForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+            const errorDiv = document.getElementById('loginError');
+            
+            if (login(username, password)) {
+                errorDiv.classList.add('hidden');
+                document.getElementById('loginScreen').classList.add('hidden');
+                document.getElementById('mainApp').classList.remove('hidden');
+                document.getElementById('currentUserDisplay').textContent = currentUser.displayName;
+                
+                // Show admin badge if user is admin
+                if (currentUser.role === 'admin') {
+                    document.getElementById('adminBadge').classList.remove('hidden');
+                    document.getElementById('manageBookingsText').textContent = 'Manage All Bookings';
+                }
+                
+                initialize();
+            } else {
+                errorDiv.textContent = 'Invalid username or password';
+                errorDiv.classList.remove('hidden');
+            }
+        });
+
+        // Handle logout
+        document.getElementById('logoutBtn').addEventListener('click', logout);
+
+        // Generate desk layout
+        function generateDeskLayout() {
+            const desks = [];
+            const areas = [
+                { name: 'Hot Room', prefix: 'HotRoom', count: 1, startX: 890, startY: 10 },
+                { name: 'Satria Utama', prefix: 'Satria', count: 1, startX: 1000, startY: 20 },
+                { name: 'Dedi Permadi', prefix: 'Dedi P', count: 1, startX: 1120, startY: 30 },
+                { name: 'Irwan Kemas', prefix: 'Irwan', count: 1, startX: 1100, startY: 120 },
+                { name: 'Adhi Purboyo', prefix: 'Adhi P', count: 1, startX: 1240, startY: 40 },
+                { name: 'M.Umar Rofik', prefix: 'Rofik', count: 1, startX: 1220, startY: 130 },
+                { name: 'Alastair Livingston', prefix: 'Alastair', count: 1, startX: 1360, startY: 50 },
+                { name: 'Mark Burley', prefix: 'Burley', count: 1, startX: 1340, startY: 140 },
+                { name: 'Ian Clarke', prefix: 'Ian C', count: 1, startX: 1480, startY: 120 },
+                { name: 'Muhammad Niza', prefix: 'Niza', count: 1, startX: 1610, startY: 120 },
+                { name: 'Suci Tri Asih B.', prefix: 'Suci', count: 1, startX: 1700, startY: 120 },
+                { name: 'Mulyawan Samad', prefix: 'Mulyawan', count: 1, startX: 1610, startY: 300 },
+                { name: 'Domenico S.Mariatmo', prefix: 'Momo', count: 1, startX: 1700, startY: 300 },
+                { name: 'Sinta Nursafitri', prefix: 'Sinta', count: 1, startX: 1490, startY: 240 },
+                { name: 'Subagio/M.Rofik', prefix: 'Bagio', count: 1, startX: 1420, startY: 240 },
+                { name: 'Indratmo Prasojo', prefix: 'Indratmo', count: 1, startX: 1490, startY: 320 },
+                { name: 'Teguh Diyanto', prefix: 'Teguh', count: 1, startX: 1420, startY: 320 },
+                { name: 'Wanda Tofani', prefix: 'Wanda', count: 1, startX: 1490, startY: 400 },
+                { name: 'Hendar Widayat', prefix: 'Hendar', count: 1, startX: 1420, startY: 400 },
+                { name: 'PE Pipeline', prefix: 'PE Pipeline', count: 1, startX: 1490, startY: 480 },
+                { name: 'Tetra Probo', prefix: 'Tetra', count: 1, startX: 1420, startY: 480 },
+                { name: 'Isganta', prefix: 'Isganta', count: 1, startX: 1490, startY: 560 },
+                { name: 'Djoko Sukowijono', prefix: 'Djoko', count: 1, startX: 1420, startY: 560 },
+                { name: 'Zahirul Fadli', prefix: 'Zahirul', count: 1, startX: 1490, startY: 640 },
+                { name: 'Bambang Irawan', prefix: 'Bambang', count: 1, startX: 1420, startY: 640 },
+                { name: 'HotDesk 1', prefix: 'Hotdesk 1', count: 1, startX: 1610, startY: 530 },
+                { name: 'M.Haikal Pasaribu', prefix: 'Haikal', count: 1, startX: 1700, startY: 530 },
+                { name: 'James Southward', prefix: 'James', count: 1, startX: 1330, startY: 240 },
+                { name: 'Tonci Ukalovic', prefix: 'Tonci', count: 1, startX: 1260, startY: 240 },
+                { name: 'Mumtaz Ali', prefix: 'Mumtaz', count: 1, startX: 1330, startY: 320 },
+                { name: 'Franky Simbolon', prefix: 'Franky', count: 1, startX: 1260, startY: 320 },
+                { name: 'Alex Townsend', prefix: 'Alex', count: 1, startX: 1330, startY: 400 },
+                { name: 'Rully Rahman', prefix: 'Rully', count: 1, startX: 1260, startY: 400 },
+                { name: 'Firman Hidayat', prefix: 'Firman', count: 1, startX: 1330, startY: 480 },
+                { name: 'Joko Wibowo', prefix: 'Joko', count: 1, startX: 1260, startY: 480 },
+                { name: 'Rian Amanda', prefix: 'Rian', count: 1, startX: 1330, startY: 560 },
+                { name: 'Annisa Aviatin', prefix: 'Annisa', count: 1, startX: 1260, startY: 560 },
+                { name: 'Ofaweri Eng1', prefix: 'OFA Eng1', count: 1, startX: 1330, startY: 640 },
+                { name: 'Ofaweri Eng2', prefix: 'OFA Eng2', count: 1, startX: 1260, startY: 640 },
+                { name: 'Ecky Yulistiana', prefix: 'Ecky', count: 1, startX: 1650, startY: 750 },
+                { name: 'Thierza Dwiyanti', prefix: 'Thierza', count: 1, startX: 1510, startY: 750 },
+                { name: 'Jovinka Aldilla', prefix: 'Jovin', count: 1, startX: 1530, startY: 830 },
+                { name: 'Chris Ruthven', prefix: 'Chris R', count: 1, startX: 1380, startY: 800 },
+                { name: 'Marawan Zakaria', prefix: 'Marawan', count: 1, startX: 1250, startY: 820 },
+                { name: 'Burhan Syafiuddin', prefix: 'Yudi', count: 1, startX: 1120, startY: 840 },
+                { name: 'Anita Juliawatri', prefix: 'Anita', count: 1, startX: 990, startY: 860 },
+                { name: 'Arian Adityantoro', prefix: 'Arian', count: 1, startX: 860, startY: 920 },
+                { name: 'Rachmi Prastiwi', prefix: 'Tiwi', count: 1, startX: 730, startY: 900 },
+                { name: 'Febi Munandar', prefix: 'Febi', count: 1, startX: 710, startY: 990 },
+                { name: 'Mokhamad Rifky', prefix: 'Rifky', count: 1, startX: 630, startY: 920 },
+                { name: 'HotDesk 2', prefix: 'Hotdesk 2', count: 1, startX: 610, startY: 1010 },
+                { name: 'Oga Zano', prefix: 'Oga', count: 1, startX: 500, startY: 970 },
+                { name: 'Wayne Cornally', prefix: 'Wayne', count: 1, startX: 380, startY: 940 },
+                { name: 'Hotman Carlo M.', prefix: 'Carlo', count: 1, startX: 300, startY: 1030 },
+                { name: 'Arthur McGregor', prefix: 'Arthur', count: 1, startX: 210, startY: 1050 },
+                { name: 'Mick Pyper', prefix: 'Mick', count: 1, startX: 120, startY: 960 },
+                { name: 'Trisnadi Sutrisno', prefix: 'Trisnadi', count: 1, startX: 120, startY: 820 },
+                { name: 'Ariani K.Murdiawati', prefix: 'Ariani', count: 1, startX: 120, startY: 720 },
+                { name: 'Bilal Akbar', prefix: 'Bilal', count: 1, startX: 1140, startY: 600 },
+                { name: 'Ardian Novanda', prefix: 'Ardian', count: 1, startX: 1150, startY: 680 },
+                { name: 'Asep Saepudin', prefix: 'Asep', count: 1, startX: 1060, startY: 610 },
+                { name: 'Resha Ilham', prefix: 'Resha', count: 1, startX: 1070, startY: 690 },
+                { name: 'Vacant 1', prefix: 'Vacant 1', count: 1, startX: 980, startY: 620 },
+                { name: 'Vacant 2', prefix: 'Vacant 2', count: 1, startX: 990, startY: 700 },
+                { name: 'Vacant 3', prefix: 'Vacant 3', count: 1, startX: 900, startY: 630 },
+                { name: 'Vacant 4', prefix: 'Vacant 4', count: 1, startX: 910, startY: 710 },
+                { name: 'Vacant 5', prefix: 'Vacant 5', count: 1, startX: 820, startY: 640 },
+                { name: 'Vacant 6', prefix: 'Vacant 6', count: 1, startX: 830, startY: 720 },
+                { name: 'Wisnu Bandono', prefix: 'Wisnu B', count: 1, startX: 740, startY: 650 },
+                { name: 'Mohamad Ilham', prefix: 'Ilham', count: 1, startX: 750, startY: 730 },
+                { name: 'Ray Clarke', prefix: 'Ray', count: 1, startX: 660, startY: 660 },
+                { name: 'Wisnu Adi', prefix: 'Wisnu A', count: 1, startX: 670, startY: 740 },
+                { name: 'Yogatama Nugroho', prefix: 'Yogatama', count: 1, startX: 580, startY: 670 },
+                { name: 'Nadya Chantika', prefix: 'Chantika', count: 1, startX: 590, startY: 750 },
+                { name: 'Nelva Saini', prefix: 'Nelva', count: 1, startX: 1150, startY: 240 },
+                { name: 'Dipta Yudhistira', prefix: 'Dipta', count: 1, startX: 1140, startY: 320 },
+                { name: 'Dwi Anto', prefix: 'Anto', count: 1, startX: 1070, startY: 230 },
+                { name: 'Jefry Hutagalung', prefix: 'Jefry', count: 1, startX: 1060, startY: 310 },
+                { name: 'Martinus Luckyanto', prefix: 'Lucky', count: 1, startX: 990, startY: 220 },
+                { name: 'Yansa Zulkarnain', prefix: 'Yansa', count: 1, startX: 980, startY: 300 },
+                { name: 'Dhian Ekawati', prefix: 'Dhian', count: 1, startX: 910, startY: 210 },
+                { name: 'Daryl Wakelin', prefix: 'Daryl', count: 1, startX: 900, startY: 290 },
+                { name: 'M.Ers Harry Yunash Tanto', prefix: 'Ers', count: 1, startX: 830, startY: 200 },
+                { name: 'Ansgarius Nugroho', prefix: 'Geri', count: 1, startX: 820, startY: 280 },
+                { name: 'Armedito Ramadhan', prefix: 'Dito', count: 1, startX: 750, startY: 190 },
+                { name: 'Sri Baardianti Adiputri', prefix: 'Didi', count: 1, startX: 740, startY: 270 },
+                { name: 'Mutiara Oendang', prefix: 'Muti', count: 1, startX: 670, startY: 180 },
+                { name: 'Sekita Dasbi', prefix: 'Sekita', count: 1, startX: 660, startY: 260 },
+            ];
+
+            areas.forEach(area => {
+                for (let i = 1; i <= area.count; i++) {
+                    const row = Math.floor((i - 1) / 5);
+                    const col = (i - 1) % 5;
+                    desks.push({
+                        id: `${area.prefix}${i.toString().padStart(2, '0')}`,
+                        location: area.name,
+                        x: area.startX + (col * 80),
+                        y: area.startY + (row * 80)
+                    });
+                }
+            });
+            return desks;
+        }
+
+        const desks = generateDeskLayout();
+
+        // Setup pan and zoom functionality
+        function setupPanAndZoom() {
+            const container = document.getElementById('svgContainer');
+            const svg = document.getElementById('officeLayout');
+            
+            // Mouse events for panning
+            container.addEventListener('mousedown', handleMouseDown);
+            container.addEventListener('mousemove', handleMouseMove);
+            container.addEventListener('mouseup', handleMouseUp);
+            container.addEventListener('mouseleave', handleMouseUp);
+            
+            // Wheel event for zooming
+            container.addEventListener('wheel', handleWheel, { passive: false });
+            
+            // Touch events for mobile
+            container.addEventListener('touchstart', handleTouchStart, { passive: false });
+            container.addEventListener('touchmove', handleTouchMove, { passive: false });
+            container.addEventListener('touchend', handleTouchEnd);
+            
+            // Zoom buttons
+            document.getElementById('zoomInBtn').addEventListener('click', () => zoom(1.2));
+            document.getElementById('zoomOutBtn').addEventListener('click', () => zoom(0.8));
+            document.getElementById('resetViewBtn').addEventListener('click', resetView);
+        }
+        
+        function handleMouseDown(e) {
+            if (e.button !== 0) return; // Only left mouse button
+            
+            isPanning = true;
+            startX = e.clientX - translateX;
+            startY = e.clientY - translateY;
+            clickStartTime = Date.now();
+            clickStartX = e.clientX;
+            clickStartY = e.clientY;
+            
+            document.getElementById('svgContainer').classList.add('dragging');
+        }
+        
+        function handleMouseMove(e) {
+            if (!isPanning) return;
+            
+            e.preventDefault();
+            translateX = e.clientX - startX;
+            translateY = e.clientY - startY;
+            updateTransform();
+        }
+        
+        function handleMouseUp(e) {
+            if (!isPanning) return;
+            
+            isPanning = false;
+            document.getElementById('svgContainer').classList.remove('dragging');
+            
+            // Check if it was a click (not a drag)
+            const timeDiff = Date.now() - clickStartTime;
+            const distX = Math.abs(e.clientX - clickStartX);
+            const distY = Math.abs(e.clientY - clickStartY);
+            
+            if (timeDiff < 200 && distX < 5 && distY < 5) {
+                // It's a click, not a drag - let the click event propagate to desks
+                return;
+            }
+        }
+        
+        function handleWheel(e) {
+            e.preventDefault();
+            
+            const delta = e.deltaY > 0 ? 0.9 : 1.1;
+            zoom(delta, e.clientX, e.clientY);
+        }
+        
+        function handleTouchStart(e) {
+            if (e.touches.length === 1) {
+                isPanning = true;
+                startX = e.touches[0].clientX - translateX;
+                startY = e.touches[0].clientY - translateY;
+            }
+        }
+        
+        function handleTouchMove(e) {
+            if (!isPanning || e.touches.length !== 1) return;
+            
+            e.preventDefault();
+            translateX = e.touches[0].clientX - startX;
+            translateY = e.touches[0].clientY - startY;
+            updateTransform();
+        }
+        
+        function handleTouchEnd(e) {
+            isPanning = false;
+        }
+        
+        function zoom(factor, centerX, centerY) {
+            const container = document.getElementById('svgContainer');
+            const rect = container.getBoundingClientRect();
+            
+            // Calculate zoom center if not provided
+            if (centerX === undefined) {
+                centerX = rect.left + rect.width / 2;
+                centerY = rect.top + rect.height / 2;
+            }
+            
+            // Limit zoom levels
+            const newScale = scale * factor;
+            if (newScale < 0.3 || newScale > 3) return;
+            
+            // Calculate new translate values to zoom towards the cursor
+            const dx = (centerX - rect.left - translateX) / scale;
+            const dy = (centerY - rect.top - translateY) / scale;
+            
+            scale = newScale;
+            translateX = centerX - rect.left - dx * scale;
+            translateY = centerY - rect.top - dy * scale;
+            
+            updateTransform();
+        }
+        
+        function resetView() {
+            scale = 1;
+            translateX = 0;
+            translateY = 0;
+            updateTransform();
+        }
+        
+        function updateTransform() {
+            const svg = document.getElementById('officeLayout');
+            svg.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
+            svg.style.transformOrigin = '0 0';
+        }
+
+        // Setup Firebase listeners
+        function setupFirebaseListeners() {
+            bookingsRef = database.ref('bookings');
+            
+            // Listen for connection state
+            const connectedRef = database.ref('.info/connected');
+            connectedRef.on('value', (snapshot) => {
+                isConnected = snapshot.val() === true;
+                updateConnectionStatus();
+            });
+
+            // Listen for booking changes
+            bookingsListener = bookingsRef.on('value', (snapshot) => {
+                const data = snapshot.val() || {};
+                bookings = data;
+                updateDisplay();
+            }, (error) => {
+                console.error('Firebase error:', error);
+                showNotification('Connection error: ' + error.message, 'error');
+            });
+        }
+
+        // Clean up old bookings (older than 30 days)
+        function cleanupOldBookings() {
+            const cutoff = new Date();
+            cutoff.setDate(cutoff.getDate() - 30);
+            const cutoffStr = cutoff.toISOString().split('T')[0];
+            
+            Object.keys(bookings).forEach(date => {
+                if (date < cutoffStr) {
+                    database.ref(`bookings/${date}`).remove();
+                }
+            });
+        }
+
+        // Connection status management
+        function updateConnectionStatus() {
+            const statusDiv = document.getElementById('connectionStatus');
+            const statusText = document.getElementById('connectionStatusText');
+            
+            if (isConnected) {
+                statusText.textContent = 'Your Desk, Your Time - Make your mark :)';
+                statusDiv.className = 'bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4';
+            } else {
+                statusText.textContent = 'Disconnected from Firebase - Retrying connection...';
+                statusDiv.className = 'bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-4';
+            }
+            statusDiv.classList.remove('hidden');
+        }
+
+        // Show notification
+        function showNotification(message, type = 'success') {
+            const notification = document.getElementById('notification');
+            const notificationText = document.getElementById('notificationText');
+            const notificationIcon = document.getElementById('notificationIcon');
+            
+            notificationText.textContent = message;
+            
+            if (type === 'success') {
+                notification.className = 'fixed top-4 right-4 p-4 rounded-md shadow-lg z-50 notification bg-green-500 text-white';
+                notificationIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>';
+            } else {
+                notification.className = 'fixed top-4 right-4 p-4 rounded-md shadow-lg z-50 notification bg-red-500 text-white';
+                notificationIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>';
+            }
+            
+            notification.classList.remove('hidden');
+            setTimeout(() => {
+                notification.classList.add('hidden');
+            }, 3000);
+        }
+
+        // Handle desk click
+        function handleDeskClick(desk) {
+            if (!currentUser) {
+                showNotification('Please login first', 'error');
+                return;
+            }
+
+            const dayBookings = bookings[selectedDate] || {};
+            const isBooked = dayBookings[desk.id];
+
+            if (isBooked && isBooked.userName !== currentUser.displayName && currentUser.role !== 'admin') {
+                showNotification('This desk is already booked by someone else', 'error');
+                return;
+            }
+
+            selectedDesk = desk;
+            showBookingModal();
+        }
+
+        // Show booking modal
+        function showBookingModal() {
+            if (!selectedDesk) return;
+            
+            document.getElementById('bookingModalTitle').textContent = `Book Desk ${selectedDesk.id}`;
+            document.getElementById('bookingLocation').textContent = selectedDesk.location;
+            document.getElementById('bookingDate').textContent = selectedDate;
+            document.getElementById('bookingUser').textContent = currentUser.displayName;
+            document.getElementById('bookingModal').classList.remove('hidden');
+        }
+
+        // Hide booking modal
+        function hideBookingModal() {
+            document.getElementById('bookingModal').classList.add('hidden');
+            selectedDesk = null;
+        }
+
+        // Handle book desk
+        function handleBookDesk() {
+            if (!selectedDesk || !currentUser) return;
+
+            if (!isConnected) {
+                showNotification('Cannot book desk - Not connected to Database..', 'error');
+                return;
+            }
+
+            const bookingData = {
+                userName: currentUser.displayName,
+                bookingTime: firebase.database.ServerValue.TIMESTAMP,
+                duration: '8 hours'
+            };
+
+            database.ref(`bookings/${selectedDate}/${selectedDesk.id}`).set(bookingData)
+                .then(() => {
+                    showNotification(`Desk ${selectedDesk.id} booked successfully for ${selectedDate}!`);
+                    hideBookingModal();
+                })
+                .catch((error) => {
+                    console.error('Booking error:', error);
+                    showNotification('Failed to book desk: ' + error.message, 'error');
+                });
+        }
+
+        // Handle cancel booking
+        function handleCancelBooking(deskId) {
+            if (!isConnected) {
+                showNotification('Cannot cancel booking - Not connected to Database..', 'error');
+                return;
+            }
+
+            database.ref(`bookings/${selectedDate}/${deskId}`).remove()
+                .then(() => {
+                    showNotification(`Booking for desk ${deskId} cancelled successfully`);
+                    hideCancellationModal();
+                })
+                .catch((error) => {
+                    console.error('Cancellation error:', error);
+                    showNotification('Failed to cancel booking: ' + error.message, 'error');
+                });
+        }
+
+        // Get user bookings (including all dates) - Enhanced for Admin
+        function getAllUserBookings() {
+            const userBookings = [];
+            Object.entries(bookings).forEach(([date, dayBookings]) => {
+                Object.entries(dayBookings).forEach(([deskId, booking]) => {
+                    // For admin, show all bookings; for users, show only their bookings
+                    if (currentUser.role === 'admin' || booking.userName === currentUser.displayName) {
+                        userBookings.push({ date, deskId, booking });
+                    }
+                });
+            });
+            return userBookings.sort((a, b) => a.date.localeCompare(b.date));
+        }
+
+        // Apply filters for admin view
+        function applyFilters(bookingsList) {
+            return bookingsList.filter(({ date, deskId, booking }) => {
+                // Search filter
+                if (currentFilters.searchUser && 
+                    !booking.userName.toLowerCase().includes(currentFilters.searchUser.toLowerCase())) {
+                    return false;
+                }
+                
+                // Date filter
+                if (currentFilters.filterDate && date !== currentFilters.filterDate) {
+                    return false;
+                }
+                
+                // User filter
+                if (currentFilters.filterUser && booking.userName !== currentFilters.filterUser) {
+                    return false;
+                }
+                
+                return true;
+            });
+        }
+
+        // Populate filter dropdowns
+        function populateFilterDropdowns() {
+            if (currentUser.role !== 'admin') return;
+            
+            const allBookings = getAllUserBookings();
+            
+            // Populate date filter
+            const dateFilter = document.getElementById('filterDate');
+            const uniqueDates = [...new Set(allBookings.map(b => b.date))].sort();
+            dateFilter.innerHTML = '<option value="">All Dates</option>';
+            uniqueDates.forEach(date => {
+                const option = document.createElement('option');
+                option.value = date;
+                option.textContent = date;
+                dateFilter.appendChild(option);
+            });
+            
+            // Populate user filter
+            const userFilter = document.getElementById('filterUser');
+            const uniqueUsers = [...new Set(allBookings.map(b => b.booking.userName))].sort();
+            userFilter.innerHTML = '<option value="">All Users</option>';
+            uniqueUsers.forEach(user => {
+                const option = document.createElement('option');
+                option.value = user;
+                option.textContent = user;
+                userFilter.appendChild(option);
+            });
+        }
+
+        // Show enhanced cancellation modal
+        function showCancellationModal() {
+            const isAdmin = currentUser.role === 'admin';
+            let userBookings = getAllUserBookings();
+            
+            // Set modal title based on user role
+            const modalTitle = document.getElementById('modalTitle');
+            modalTitle.textContent = isAdmin ? 'Manage All Bookings' : 'Your Bookings';
+            
+            // Show/hide admin controls
+            const adminControls = document.getElementById('adminControls');
+            if (isAdmin) {
+                adminControls.classList.remove('hidden');
+                populateFilterDropdowns();
+            } else {
+                adminControls.classList.add('hidden');
+            }
+            
+            // Apply filters if admin
+            if (isAdmin) {
+                userBookings = applyFilters(userBookings);
+            }
+            
+            const bookingsList = document.getElementById('bookingsList');
+            const noBookingsMessage = document.getElementById('noBookingsMessage');
+            
+            if (userBookings.length === 0) {
+                bookingsList.innerHTML = '';
+                noBookingsMessage.classList.remove('hidden');
+            } else {
+                noBookingsMessage.classList.add('hidden');
+                bookingsList.innerHTML = userBookings.map(({ date, deskId, booking }) => {
+                    const desk = desks.find(d => d.id === deskId);
+                    const isToday = date === selectedDate;
+                    const bookingTime = booking.bookingTime ? new Date(booking.bookingTime).toLocaleString() : 'Unknown';
+                    const isCurrentUserBooking = booking.userName === currentUser.displayName;
+                    const cardClass = isAdmin && !isCurrentUserBooking ? 'booking-item-admin' : '';
+                    
+                    return `
+                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-md ${cardClass}">
+                            <div class="flex-1">
+                                <p class="font-semibold flex items-center gap-2">
+                                    Desk ${deskId} 
+                                    ${isToday ? '<span class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">Today</span>' : ''}
+                                    ${isAdmin && !isCurrentUserBooking ? '<span class="bg-orange-100 text-orange-800 text-xs px-2 py-1 rounded-full">Other User</span>' : ''}
+                                </p>
+                                <p class="text-sm text-gray-600 font-medium">${desk ? desk.location : 'Unknown Location'}</p>
+                                <p class="text-xs text-gray-500 font-medium">User: ${booking.userName}</p>
+                                <p class="text-xs text-gray-500 font-medium">Date: ${date}</p>
+                                <p class="text-xs text-gray-500 font-medium">Booked: ${bookingTime}</p>
+                            </div>
+                            <button
+                                onclick="handleCancelBookingForDate('${deskId}', '${date}', '${booking.userName}')"
+                                class="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 transition-colors font-medium"
+                                title="${isAdmin && !isCurrentUserBooking ? 'Cancel as Admin' : 'Cancel Booking'}"
+                            >
+                                ${isAdmin && !isCurrentUserBooking ? 'Admin Cancel' : 'Cancel'}
+                            </button>
+                        </div>
+                    `;
+                }).join('');
+            }
+            
+            document.getElementById('cancellationModal').classList.remove('hidden');
+        }
+
+        // Handle cancel booking for specific date - Enhanced for Admin
+        window.handleCancelBookingForDate = function(deskId, date, userName) {
+            if (!isConnected) {
+                showNotification('Cannot cancel booking - Not connected to Database..', 'error');
+                return;
+            }
+
+            // Show confirmation for admin cancelling other users' bookings
+            if (currentUser.role === 'admin' && userName !== currentUser.displayName) {
+                if (!confirm(`Are you sure you want to cancel ${userName}'s booking for desk ${deskId} on ${date}?`)) {
+                    return;
+                }
+            }
+
+            database.ref(`bookings/${date}/${deskId}`).remove()
+                .then(() => {
+                    const message = currentUser.role === 'admin' && userName !== currentUser.displayName 
+                        ? `Admin cancelled ${userName}'s booking for desk ${deskId} on ${date}`
+                        : `Booking for desk ${deskId} on ${date} cancelled successfully`;
+                    showNotification(message);
+                    showCancellationModal(); // Refresh the list
+                })
+                .catch((error) => {
+                    console.error('Cancellation error:', error);
+                    showNotification('Failed to cancel booking: ' + error.message, 'error');
+                });
+        };
+
+        // Hide cancellation modal
+        function hideCancellationModal() {
+            document.getElementById('cancellationModal').classList.add('hidden');
+            // Reset filters
+            currentFilters = {
+                searchUser: '',
+                filterDate: '',
+                filterUser: ''
+            };
+        }
+
+        // Setup admin filter event listeners
+        function setupAdminFilters() {
+            if (currentUser.role !== 'admin') return;
+            
+            const searchInput = document.getElementById('searchUser');
+            const dateFilter = document.getElementById('filterDate');
+            const userFilter = document.getElementById('filterUser');
+            const clearFiltersBtn = document.getElementById('clearFiltersBtn');
+            
+            // Search filter
+            searchInput.addEventListener('input', (e) => {
+                currentFilters.searchUser = e.target.value;
+                showCancellationModal();
+            });
+            
+            // Date filter
+            dateFilter.addEventListener('change', (e) => {
+                currentFilters.filterDate = e.target.value;
+                showCancellationModal();
+            });
+            
+            // User filter
+            userFilter.addEventListener('change', (e) => {
+                currentFilters.filterUser = e.target.value;
+                showCancellationModal();
+            });
+            
+            // Clear filters
+            clearFiltersBtn.addEventListener('click', () => {
+                currentFilters = { searchUser: '', filterDate: '', filterUser: '' };
+                searchInput.value = '';
+                dateFilter.value = '';
+                userFilter.value = '';
+                showCancellationModal();
+            });
+        }
+
+        // Export data function (for Admin only)
+        function exportData() {
+            console.log('Export function called');
+            
+            if (currentUser.role !== 'admin') {
+                showNotification('Only Admin can export data', 'error');
+                return;
+            }
+
+            // Check if XLSX is loaded
+            if (typeof XLSX === 'undefined') {
+                showNotification('Excel library not loaded. Please refresh the page and try again.', 'error');
+                console.error('XLSX library is not loaded');
+                return;
+            }
+
+            console.log('XLSX library loaded successfully');
+
+            // Prepare data for Excel export
+            const excelData = [];
+            
+            // Iterate through all bookings
+            Object.entries(bookings).forEach(([date, dayBookings]) => {
+                Object.entries(dayBookings).forEach(([deskId, booking]) => {
+                    // Find the desk information
+                    const desk = desks.find(d => d.id === deskId);
+                    
+                    // Add row to Excel data
+                    excelData.push({
+                        'BOOKING_DATE': date,
+                        'USERNAME': booking.userName,
+                        'LOCATION': desk ? desk.location : 'Unknown Location'
+                    });
+                });
+            });
+
+            console.log('Data prepared:', excelData.length, 'rows');
+
+            // Sort by booking date
+            excelData.sort((a, b) => a.BOOKING_DATE.localeCompare(b.BOOKING_DATE));
+
+            if (excelData.length === 0) {
+                showNotification('No bookings to export', 'error');
+                return;
+            }
+
+            try {
+                // Create a new workbook
+                const wb = XLSX.utils.book_new();
+                console.log('Workbook created');
+                
+                // Convert data to worksheet
+                const ws = XLSX.utils.json_to_sheet(excelData);
+                console.log('Worksheet created');
+                
+                // Set column widths
+                const colWidths = [
+                    { wch: 15 }, // BOOKING_DATE
+                    { wch: 25 }, // USERNAME
+                    { wch: 30 }  // LOCATION
+                ];
+                ws['!cols'] = colWidths;
+                
+                // Add worksheet to workbook
+                XLSX.utils.book_append_sheet(wb, ws, 'Desk Bookings');
+                console.log('Worksheet added to workbook');
+                
+                // Generate filename with current date
+                const fileName = `desk-bookings-${new Date().toISOString().split('T')[0]}.xlsx`;
+                
+                // Write the file
+                XLSX.writeFile(wb, fileName);
+                console.log('File download initiated');
+                
+                showNotification(`Excel file exported successfully with ${excelData.length} bookings`);
+            } catch (error) {
+                console.error('Export error:', error);
+                showNotification('Failed to export data: ' + error.message, 'error');
+            }
+        }
+
+        // Create desk SVG element
+        function createDeskElement(desk) {
+            const dayBookings = bookings[selectedDate] || {};
+            const booking = dayBookings[desk.id];
+            const isBooked = !!booking;
+            const isMyBooking = booking && booking.userName === currentUser.displayName;
+
+            const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            group.setAttribute('class', 'desk-hover cursor-pointer');
+            group.style.cursor = 'pointer';
+            
+            // Use onmousedown instead of onclick to prevent conflict with panning
+            group.onmousedown = (e) => {
+                clickStartTime = Date.now();
+                clickStartX = e.clientX;
+                clickStartY = e.clientY;
+            };
+            
+            group.onmouseup = (e) => {
+                const timeDiff = Date.now() - clickStartTime;
+                const distX = Math.abs(e.clientX - clickStartX);
+                const distY = Math.abs(e.clientY - clickStartY);
+                
+                if (timeDiff < 200 && distX < 5 && distY < 5) {
+                    handleDeskClick(desk);
+                }
+            };
+
+            // Desk surface
+            const deskRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            deskRect.setAttribute('x', desk.x);
+            deskRect.setAttribute('y', desk.y);
+            deskRect.setAttribute('width', '60');
+            deskRect.setAttribute('height', '40');
+            deskRect.setAttribute('fill', isBooked ? (isMyBooking ? '#10b981' : '#ef4444') : '#e5e7eb');
+            deskRect.setAttribute('stroke', isBooked ? (isMyBooking ? '#059669' : '#dc2626') : '#9ca3af');
+            deskRect.setAttribute('stroke-width', '2');
+            deskRect.setAttribute('rx', '4');
+
+            // Chair
+            const chairRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            chairRect.setAttribute('x', desk.x + 15);
+            chairRect.setAttribute('y', desk.y + 45);
+            chairRect.setAttribute('width', '30');
+            chairRect.setAttribute('height', '20');
+            chairRect.setAttribute('fill', isBooked ? (isMyBooking ? '#10b981' : '#ef4444') : '#d1d5db');
+            chairRect.setAttribute('stroke', isBooked ? (isMyBooking ? '#059669' : '#dc2626') : '#9ca3af');
+            chairRect.setAttribute('stroke-width', '1');
+            chairRect.setAttribute('rx', '2');
+
+            // Desk ID (show only prefix without the "01")
+            const deskIdText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            deskIdText.setAttribute('x', desk.x + 30);
+            deskIdText.setAttribute('y', desk.y + 25);
+            deskIdText.setAttribute('text-anchor', 'middle');
+            deskIdText.setAttribute('class', 'svg-text');
+            deskIdText.setAttribute('fill', isBooked ? 'white' : '#374151');
+            deskIdText.textContent = desk.id.replace(/01$/, ''); // Remove "01" suffix
+
+            // Location pin
+            const locationPin = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            locationPin.setAttribute('cx', desk.x + 55);
+            locationPin.setAttribute('cy', desk.y + 5);
+            locationPin.setAttribute('r', '3');
+            locationPin.setAttribute('fill', isBooked ? (isMyBooking ? '#059669' : '#dc2626') : '#6b7280');
+
+            group.appendChild(deskRect);
+            group.appendChild(chairRect);
+            group.appendChild(deskIdText);
+            group.appendChild(locationPin);
+
+            // User name if booked
+            if (isBooked) {
+                const userNameText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                userNameText.setAttribute('x', desk.x + 30);
+                userNameText.setAttribute('y', desk.y + 35);
+                userNameText.setAttribute('text-anchor', 'middle');
+                userNameText.setAttribute('class', 'svg-text-small');
+                userNameText.setAttribute('fill', 'white');
+                userNameText.textContent = booking.userName;
+                group.appendChild(userNameText);
+            }
+
+            return group;
+        }
+
+        // Update display
+        function updateDisplay() {
+            const dayBookings = bookings[selectedDate] || {};
+            const bookedCount = Object.keys(dayBookings).length;
+            const totalDesks = desks.length;
+            const userBookingsCount = Object.values(dayBookings).filter(b => b.userName === currentUser.displayName).length;
+
+            // Update statistics
+            document.getElementById('bookedToday').textContent = bookedCount;
+            document.getElementById('availableToday').textContent = totalDesks - bookedCount;
+            document.getElementById('yourBookings').textContent = userBookingsCount;
+            
+            // Add animation to statistics updates
+            const statElements = ['bookedToday', 'availableToday', 'yourBookings'];
+            statElements.forEach(id => {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.style.transition = 'all 0.3s ease';
+                    element.style.transform = 'scale(0.95)';
+                    setTimeout(() => {
+                        element.style.transform = 'scale(1)';
+                    }, 50);
+                }
+            });
+
+            // Update layout title
+            document.getElementById('layoutTitle').textContent = `UCC Offshore 8th Floor - ${selectedDate}`;
+
+            // Update buttons visibility
+            const exportBtn = document.getElementById('exportBtn');
+            
+            if (currentUser && currentUser.role === 'admin') {
+                exportBtn.classList.remove('hidden');
+            } else {
+                exportBtn.classList.add('hidden');
+            }
+
+            // Clear existing desks and redraw
+            const svg = document.getElementById('officeLayout');
+            const existingDesks = svg.querySelectorAll('g.desk-hover');
+            existingDesks.forEach(desk => desk.remove());
+
+            // Add all desks
+            desks.forEach(desk => {
+                const deskElement = createDeskElement(desk);
+                svg.appendChild(deskElement);
+            });
+        }
+
+        // Refresh data
+        function refreshData() {
+            const refreshBtn = document.getElementById('refreshBtn');
+            const originalText = refreshBtn.innerHTML;
+            
+            refreshBtn.innerHTML = `
+                <div class="loading"></div>
+                <span>Refreshing...</span>
+            `;
+            refreshBtn.disabled = true;
+            
+            // Force reload from Firebase
+            database.ref('bookings').once('value')
+                .then((snapshot) => {
+                    bookings = snapshot.val() || {};
+                    updateDisplay();
+                    showNotification('Data refreshed successfully');
+                })
+                .catch((error) => {
+                    console.error('Refresh error:', error);
+                    showNotification('Failed to refresh data', 'error');
+                })
+                .finally(() => {
+                    refreshBtn.innerHTML = originalText;
+                    refreshBtn.disabled = false;
+                });
+        }
+
+        // Initialize
+        function initialize() {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('selectedDate').value = today;
+            document.getElementById('selectedDate').min = today;
+            selectedDate = today;
+
+            // Setup Firebase
+            setupFirebaseListeners();
+            
+            // Setup pan and zoom
+            setupPanAndZoom();
+
+            // Event listeners
+            document.getElementById('selectedDate').addEventListener('change', (e) => {
+                selectedDate = e.target.value;
+                updateDisplay();
+            });
+
+            document.getElementById('manageBookingsBtn').addEventListener('click', showCancellationModal);
+            document.getElementById('exportBtn').addEventListener('click', exportData);
+            document.getElementById('confirmBookingBtn').addEventListener('click', handleBookDesk);
+            document.getElementById('cancelBookingFormBtn').addEventListener('click', hideBookingModal);
+            document.getElementById('closeCancellationBtn').addEventListener('click', hideCancellationModal);
+            document.getElementById('refreshBtn').addEventListener('click', refreshData);
+
+            // Setup admin filters if user is admin
+            if (currentUser.role === 'admin') {
+                setupAdminFilters();
+            }
+
+            // Close modals when clicking outside
+            document.getElementById('bookingModal').addEventListener('click', (e) => {
+                if (e.target === document.getElementById('bookingModal')) {
+                    hideBookingModal();
+                }
+            });
+
+            document.getElementById('cancellationModal').addEventListener('click', (e) => {
+                if (e.target === document.getElementById('cancellationModal')) {
+                    hideCancellationModal();
+                }
+            });
+
+            // Clean up old bookings periodically
+            cleanupOldBookings();
+            setInterval(cleanupOldBookings, 86400000); // Once per day
+
+            // Hide loading overlay once connected
+            setTimeout(() => {
+                document.getElementById('loadingOverlay').classList.add('hidden');
+            }, 2000);
+        }
+
+        // Handle window focus to refresh data
+        window.addEventListener('focus', () => {
+            if (isConnected) {
+                refreshData();
+            }
+        });
+
+        // Start the application
+        document.addEventListener('DOMContentLoaded', () => {
+            if (checkSession()) {
+                document.getElementById('loginScreen').classList.add('hidden');
+                document.getElementById('mainApp').classList.remove('hidden');
+                document.getElementById('currentUserDisplay').textContent = currentUser.displayName;
+                
+                // Show admin badge if user is admin
+                if (currentUser.role === 'admin') {
+                    document.getElementById('adminBadge').classList.remove('hidden');
+                    document.getElementById('manageBookingsText').textContent = 'Manage All Bookings';
+                }
+                
+                initialize();
+            }
+        });
+    </script>
+</body>
+</html>
